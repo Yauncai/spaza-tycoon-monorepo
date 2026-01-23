@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ItemType } from '../types';
+import MintLatjie from './MintLatjie';
 
 interface ShopScreenProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ const SHOP_ITEMS: StockItem[] = [
 ];
 
 const ShopScreen: React.FC<ShopScreenProps> = ({ isOpen, onClose, spzaBalance, stock, onPurchase }) => {
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const handleBuyStock = (itemName: ItemType, price: number) => {
     if (spzaBalance >= price) {
@@ -61,6 +63,36 @@ const ShopScreen: React.FC<ShopScreenProps> = ({ isOpen, onClose, spzaBalance, s
 
       <div className="flex-1 overflow-y-auto p-6" style={{backgroundImage: 'url(/assets/sunny_day.png)', backgroundSize: 'cover', backgroundPosition: 'center'}}>
         <div className="max-w-6xl mx-auto">
+          {feedback && (
+            <div className="mb-6">
+              <div className="bg-green-200 border-4 border-black px-4 py-3 font-heading text-lg text-black shadow-[6px_6px_0px_0px_black] text-center">
+                {feedback}
+              </div>
+            </div>
+          )}
+          
+          {/* Recruit Staff Section */}
+          <div className="mb-8">
+            <h2 className="font-heading text-3xl text-black mb-6 bg-yellow-300 p-4 border-4 border-black text-center shadow-[6px_6px_0px_0px_black]">RECRUIT STAFF</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white/90 backdrop-blur-sm border-4 border-black rounded-xl p-6 shadow-[8px_8px_0px_0px_black] flex flex-col md:flex-row items-center gap-6">
+                <div className="w-32 h-32 bg-yellow-200 border-4 border-black rounded-xl flex items-center justify-center overflow-hidden">
+                  <img
+                    src="/assets/Young_man.png"
+                    alt="Latjie character"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div className="flex-1 flex flex-col gap-3">
+                  <div>
+                    <h3 className="font-heading text-2xl text-black">Latjie</h3>
+                    <p className="text-sm text-gray-700">Bring on your first hustler with a fully sponsored mint on Base Sepolia.</p>
+                  </div>
+                  <MintLatjie onSuccess={() => setFeedback('MOOI! WELCOME!')} />
+                </div>
+              </div>
+            </div>
+          </div>
           
           {/* Current Stock Section */}
           <div className="mb-8">

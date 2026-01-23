@@ -17,16 +17,16 @@ export const PHRASES = {
     "Hola, shaya {item}. And a loose draw? No? Okay."
   ],
   child: [
-    "Malume... mama said I must buy {item}. She gave me half-tiger.",
+    "Malume... mama said I must buy {item}. She gave me R20.",
     "My friend... can I have {item}? Please.",
     "Malume, here is the money for {item}.",
     "Malume... mama is asking for {item}. Quick please."
   ],
   gogo: [
-    "Molo mntanami. Give me {item}. My head is sore.",
-    "Sbali, I need {item} for the tea.",
+    "Molo mntanami. Can I please have {item}.",
+    "Sbali, I need {item}.",
     "Mntanami, give Gogo {item}. You are a good boy.",
-    "Molo. I have a tiger here, give me {item}."
+    "Molo. I have a R50 here, give me {item}."
   ]
 };
 
