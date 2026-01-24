@@ -52,12 +52,6 @@ const WalletGate: React.FC<WalletGateProps> = ({ onConnect }) => {
           </>
         )}
       </div>
-      <style jsx>{`
-        @keyframes loadingBar {
-          from { width: 0%; }
-          to { width: 100%; }
-        }
-      `}</style>
     </div>
   );
 };

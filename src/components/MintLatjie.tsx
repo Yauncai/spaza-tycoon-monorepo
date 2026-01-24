@@ -1,22 +1,7 @@
 import React from 'react';
 import { useAccount } from 'wagmi';
 import { useNFTs } from '../web3/useNFTs';
-import { baseSepolia } from 'wagmi/chains';
-import type { Abi, Address } from 'viem';
-import { zeroAddress } from 'viem';
-import { Transaction, TransactionButton, TransactionStatus } from '@coinbase/onchainkit/transaction';
-
-const NFT_CONTRACT = '0x...EXP' as Address;
-
-const ERC721_MINT_ABI: Abi = [
-  {
-    name: 'mint',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'to', type: 'address' }],
-    outputs: [{ name: 'tokenId', type: 'uint256' }],
-  },
-];
+import { useERC1155Mint } from '../web3/useERC1155Mint';
 
 interface MintLatjieProps {
   onSuccess?: () => void;
@@ -24,37 +9,29 @@ interface MintLatjieProps {
 
 const MintLatjie: React.FC<MintLatjieProps> = ({ onSuccess }) => {
   const { address } = useAccount();
-  const toAddress: Address = address ?? zeroAddress;
   const { nfts, fetchNFTs } = useNFTs();
+  const { mintLatjie, isPending, isSuccess, error } = useERC1155Mint();
   const hasLatjie = nfts.some(n => n.type === 'Latjie');
 
+  const handleMint = async () => {
+    if (!address || hasLatjie) return;
+    await mintLatjie();
+    fetchNFTs();
+    if (onSuccess) onSuccess();
+  };
+
   return (
-    <Transaction
-      chainId={baseSepolia.id}
-      calls={[
-        {
-          to: NFT_CONTRACT,
-          abi: ERC721_MINT_ABI,
-          functionName: 'mint',
-          args: [toAddress],
-        },
-      ]}
-      isSponsored
-      onSuccess={() => {
-        // refresh NFTs after successful mint and call parent callback
-        fetchNFTs();
-        if (onSuccess) onSuccess();
-      }}
-    >
-      <div className="flex flex-col gap-3">
-        <TransactionButton
-          text={hasLatjie ? 'Latjie owned' : (address ? 'Recruit Latjie (Gasless)' : 'Connect wallet to mint')}
-          className="neubrutalist-btn bg-yellow-400 border-4 border-black font-sign text-black px-4 py-3 hover:-translate-y-0.5 hover:translate-x-0.5 transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
-          disabled={!address || hasLatjie}
-        />
-        <TransactionStatus />
-      </div>
-    </Transaction>
+    <div className="flex flex-col gap-3">
+      <button
+        onClick={handleMint}
+        disabled={isPending || !address || hasLatjie}
+        className="neubrutalist-btn bg-yellow-400 border-4 border-black font-sign text-black px-4 py-3 hover:-translate-y-0.5 hover:translate-x-0.5 transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        {isPending ? 'Recruiting Latjie...' : hasLatjie ? 'Latjie owned' : (address ? 'Recruit Latjie (Gasless)' : 'Connect wallet to mint')}
+      </button>
+      {isSuccess && <p className="text-green-600 font-bold">Latjie recruited successfully!</p>}
+      {error && <p className="text-red-600 font-bold">{error}</p>}
+    </div>
   );
 };
 
