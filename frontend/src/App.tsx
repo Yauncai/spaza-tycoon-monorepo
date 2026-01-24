@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import LoginScreen from './components/LoginScreen';
 import useERC1155Mint from './web3/useERC1155Mint';
 import { useWeather } from './hooks/useWeather';
@@ -13,6 +13,7 @@ import { CHARACTERS, ITEMS, PHRASES } from './data/gameData';
 import { useSound } from './hooks/useSound';
 import useGrootmanMint from './web3/useGrootmanMint';
 import { useAccount } from 'wagmi';
+import { useNFTs } from './web3/useNFTs';
 
 const INITIAL_STOCK: Record<ItemType, number> = {
   Bread: 15,
@@ -21,6 +22,15 @@ const INITIAL_STOCK: Record<ItemType, number> = {
   Eggs: 6,
   Goslos: 4,
   Benny: 3
+};
+
+const ITEM_PRICE: Record<ItemType, number> = {
+  Bread: 5,
+  Coke: 3,
+  Milk: 4,
+  Eggs: 6,
+  Goslos: 8,
+  Benny: 10
 };
 
 const App: React.FC = () => {
@@ -56,6 +66,9 @@ const App: React.FC = () => {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const chirpRef = useRef<HTMLAudioElement | null>(null);
 
+  const weather = useWeather();
+  const { nfts, fetchNFTs } = useNFTs();
+
   const stopChirping = useCallback(() => {
     if (chirpRef.current) {
       chirpRef.current.pause();
@@ -75,59 +88,49 @@ const App: React.FC = () => {
 
   const handleWalletConnect = useCallback((address: string) => {
     setGameState(prev => ({ ...prev, walletConnected: true }));
-    // Show mint prompt on first connect
     setShowMintPrompt(true);
-  }, []);
+    fetchNFTs();
+  }, [fetchNFTs]);
 
-  // ERC-1155 mint hook (Latjie / Lepara)
+  // mint hooks
   const { mintLatjie, mintLepara, isPending: mintPending, error: mintError } = useERC1155Mint();
-  const weather = useWeather();
-
-  // ERC-721 Grootman mint hook (uses provided IPFS metadata)
-  const { mintGrootman, isPending: grootPending, error: grootError } = useGrootmanMint();
+  const { mintGrootman } = useGrootmanMint();
   const { address: accountAddress } = useAccount();
 
-  // Auto-trigger Grootman mint when SPZA threshold reached
-  React.useEffect(() => {
+  // Auto-trigger Lepara / Grootman based on `rep` thresholds and ownership
+  useEffect(() => {
     if (!gameState.walletConnected) return;
+    const LEPARA_THRESHOLD = 1000;
     const GROOT_THRESHOLD = 5000;
-    if (!promotedToGrootman && spzaBalance >= GROOT_THRESHOLD && typeof mintGrootman === 'function') {
-      const metadataURI = 'ipfs://bafkreidu7vwogndcpfllabbysjhcbevdxhk4o5qpzczsjtzwhzia3fz4ri';
+
+    const hasLepara = nfts.some(n => n.type === 'Lepara');
+    const hasGroot = nfts.some(n => n.type === 'Grootman');
+
+    if (!promotedToLepara && rep >= LEPARA_THRESHOLD && !hasLepara) {
+      mintLepara().then(() => {
+        setPromotedToLepara(true);
+        fetchNFTs();
+      }).catch(e => console.warn('Lepara promotion failed', e));
+    }
+
+    if (!promotedToGrootman && rep >= GROOT_THRESHOLD && !hasGroot) {
       const to = accountAddress ?? '';
       if (!to) return;
+      const metadataURI = 'ipfs://bafkreidu7vwogndcpfllabbysjhcbevdxhk4o5qpzczsjtzwhzia3fz4ri';
       mintGrootman(to as `0x${string}`, metadataURI)
-        .then(() => setPromotedToGrootman(true))
-        .catch((e) => console.warn('Grootman mint failed', e));
+        .then(() => {
+          setPromotedToGrootman(true);
+          fetchNFTs();
+        })
+        .catch(e => console.warn('Grootman mint failed', e));
     }
-  }, [spzaBalance, promotedToGrootman, mintGrootman, gameState.walletConnected, accountAddress]);
-
-  // Auto-trigger Lepara promotion when SPZA threshold reached
-  React.useEffect(() => {
-    if (!gameState.walletConnected) return;
-    // user specified Lepara at 1500
-    const LEPARA_THRESHOLD = 1500;
-    if (!promotedToLepara && spzaBalance >= LEPARA_THRESHOLD) {
-      // attempt gasless promotion; mark promoted to avoid repeats
-      mintLepara()
-        .then(() => setPromotedToLepara(true))
-        .catch((e) => console.warn('Lepara promotion failed', e));
-    }
-  }, [spzaBalance, promotedToLepara, mintLepara, gameState.walletConnected]);
+  }, [rep, gameState.walletConnected, promotedToLepara, promotedToGrootman, mintLepara, mintGrootman, fetchNFTs, nfts, accountAddress]);
 
   const handlePurchaseStock = useCallback((item: ItemType, price: number, quantity = 5) => {
     setSpzaBalance(prev => prev - price);
     setStock(prev => ({ ...prev, [item]: prev[item] + quantity }));
     playSound('kaching');
   }, [playSound]);
-
-  const ITEM_PRICE: Record<ItemType, number> = {
-    Bread: 5,
-    Coke: 3,
-    Milk: 4,
-    Eggs: 6,
-    Goslos: 8,
-    Benny: 10
-  };
 
   const nextRound = useCallback(() => {
     setShowCustomer(false);
@@ -136,11 +139,10 @@ const App: React.FC = () => {
     setTimeout(() => {
       const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
       let item = ITEMS[Math.floor(Math.random() * ITEMS.length)];
-      
-      if (char.type === 'child' && item === 'Cigarettes') item = 'Bread';
+      if (char.type === 'child' && String(item) === 'Cigarettes') item = 'Bread';
 
       setGameState(prev => ({ ...prev, currentOrder: item }));
-      
+
       const phraseTemplate = PHRASES[char.type][Math.floor(Math.random() * PHRASES[char.type].length)];
       const itemHtml = `<span class="text-blue-600 font-bold text-lg">${item.toUpperCase()}</span>`;
       const finalPhrase = phraseTemplate.replace('{item}', itemHtml);
@@ -148,7 +150,7 @@ const App: React.FC = () => {
       setCurrentCustomer(char);
       setCurrentDialogue(finalPhrase);
       setShowCustomer(true);
-      
+
       setTimeout(() => {
         setShowBubble(true);
         playSound('pop');
@@ -158,7 +160,6 @@ const App: React.FC = () => {
 
   const startTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
-    
     timerRef.current = setInterval(() => {
       setGameState(prev => {
         const newTimeLeft = prev.timeLeft - 0.1;
@@ -169,27 +170,18 @@ const App: React.FC = () => {
             stopChirping();
             return { ...prev, playing: false, timeLeft: 0, hearts: 0 };
           } else {
-            // Reset timer and continue with fewer hearts
             return { ...prev, timeLeft: 10, hearts: newHearts };
           }
         }
         return { ...prev, timeLeft: newTimeLeft };
       });
     }, 100);
-  }, [playSound, stopChirping]);
+  }, [stopChirping]);
 
   const startGame = useCallback(() => {
     if (!gameState.walletConnected) return;
-    
-    setGameState(prev => ({
-      ...prev,
-      playing: true,
-      score: 0,
-      timeLeft: 10,
-      hearts: 5
-    }));
+    setGameState(prev => ({ ...prev, playing: true, score: 0, timeLeft: 10, hearts: 5 }));
     setGameOver(false);
-    
     playSound('start');
     startChirping();
     nextRound();
@@ -208,7 +200,6 @@ const App: React.FC = () => {
 
   const handleOrder = useCallback((item: ItemType) => {
     if (!gameState.playing) return;
-    
     if (item === gameState.currentOrder) {
       if (!stock[item] || stock[item] <= 0) {
         handleOutOfStock(item);
@@ -217,12 +208,12 @@ const App: React.FC = () => {
 
       setStock(prev => ({ ...prev, [item]: Math.max(0, prev[item] - 1) }));
 
-      // Award SPZA and Rep based on item price, speed, weather, and combos
+      // reward math
       const baseEarn = ITEM_PRICE[item] ?? 1;
       const timeLeft = gameState.timeLeft ?? 0;
-      const speedMultiplier = 1 + Math.max(0, (timeLeft / 10) * 0.5); // up to +50% for fastest serves
-      const weatherModifier = weather.icon === 'rainy' ? 1.1 : 1.0; // +10% in rain
-      const comboBonus = 1 + Math.max(0, consecutiveServes) * 0.05; // +5% per consecutive serve
+      const speedMultiplier = 1 + Math.max(0, (timeLeft / 10) * 0.5);
+      const weatherModifier = weather.icon === 'rainy' ? 1.1 : 1.0;
+      const comboBonus = 1 + Math.max(0, consecutiveServes) * 0.05;
 
       const spzaEarned = Math.round(baseEarn * speedMultiplier * weatherModifier * comboBonus);
       const repGain = Math.max(1, Math.round(baseEarn * 0.1 * speedMultiplier * comboBonus));
@@ -231,12 +222,7 @@ const App: React.FC = () => {
       setRep(prev => prev + repGain);
       setConsecutiveServes(prev => prev + 1);
 
-      setGameState(prev => ({
-        ...prev,
-        score: prev.score + 1,
-        timeLeft: Math.min(10, prev.timeLeft + 2)
-      }));
-
+      setGameState(prev => ({ ...prev, score: prev.score + 1, timeLeft: Math.min(10, prev.timeLeft + 2) }));
       playSound('kaching');
       nextRound();
     } else {
@@ -250,20 +236,18 @@ const App: React.FC = () => {
         return { ...prev, hearts: newHearts };
       });
 
-      // Penalty: reset combo and small rep loss
+      // penalty
       setConsecutiveServes(0);
       setRep(prev => Math.max(0, prev - 1));
 
-      // Show "Haibo!?" feedback
       setCurrentDialogue('<span class="text-red-600 font-bold text-xl">Haibo!?</span>');
       setShakeMain(true);
-
       setTimeout(() => {
         setShakeMain(false);
-        nextRound(); // Move to next customer after feedback
+        nextRound();
       }, 1000);
     }
-  }, [gameState.playing, gameState.currentOrder, playSound, nextRound, stock, handleOutOfStock]);
+  }, [gameState.playing, gameState.currentOrder, nextRound, stock, handleOutOfStock, playSound, consecutiveServes, weather.icon]);
 
   const handleRestart = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -271,23 +255,24 @@ const App: React.FC = () => {
     startGame();
   }, [startGame]);
 
-  // Cleanup timer on unmount
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       stopChirping();
     };
   }, [stopChirping]);
 
-  React.useEffect(() => {
-    if (gameOver) {
-      stopChirping();
-    }
+  useEffect(() => {
+    if (gameOver) stopChirping();
   }, [gameOver, stopChirping]);
+
+  // Ownership helper for Latjie prompt
+  const hasLatjie = nfts.some(n => n.type === 'Latjie');
 
   return (
     <div className="bg-white min-h-screen flex flex-col relative font-body">
       {!gameState.walletConnected && <LoginScreen onConnect={handleWalletConnect} />}
+
       {/* Mint prompt shown once after login for Latjie (ERC-1155) */}
       {gameState.walletConnected && showMintPrompt && (
         <div className="fixed inset-0 z-[999] bg-black/60 flex items-center justify-center px-4">
@@ -299,45 +284,25 @@ const App: React.FC = () => {
               <button
                 className="neubrutalist-btn bg-yellow-400 px-4 py-2"
                 onClick={async () => {
-                  await mintLatjie();
+                  if (!hasLatjie) await mintLatjie();
+                  fetchNFTs();
                   setShowMintPrompt(false);
                 }}
-                disabled={mintPending}
+                disabled={mintPending || hasLatjie}
               >
-                {mintPending ? 'Minting...' : 'Mint Latjie'}
+                {mintPending ? 'Minting...' : (hasLatjie ? 'Already owned' : 'Mint Latjie')}
               </button>
-              <button
-                className="neubrutalist-btn bg-gray-200 px-4 py-2"
-                onClick={() => setShowMintPrompt(false)}
-                disabled={mintPending}
-              >
-                Skip
-              </button>
+              <button className="neubrutalist-btn bg-gray-200 px-4 py-2" onClick={() => setShowMintPrompt(false)} disabled={mintPending}>Skip</button>
             </div>
           </div>
         </div>
       )}
-      
-      <GlossaryModal 
-        isOpen={glossaryOpen} 
-        onClose={() => setGlossaryOpen(false)} 
-      />
-      
-      <WalletScreen 
-        isOpen={walletOpen} 
-        onClose={() => setWalletOpen(false)} 
-      />
-      
-      <ShopScreen 
-        isOpen={shopOpen} 
-        onClose={() => setShopOpen(false)}
-        spzaBalance={spzaBalance}
-        stock={stock}
-        onPurchase={(item, price, quantity = 5) => {
-          if (spzaBalance < price) return;
-          handlePurchaseStock(item, price, quantity);
-        }}
-      />
+
+      <GlossaryModal isOpen={glossaryOpen} onClose={() => setGlossaryOpen(false)} />
+      <WalletScreen isOpen={walletOpen} onClose={() => setWalletOpen(false)} />
+      <ShopScreen isOpen={shopOpen} onClose={() => setShopOpen(false)} spzaBalance={spzaBalance} stock={stock} onPurchase={(item, price, quantity = 5) => {
+        if (spzaBalance < price) return; handlePurchaseStock(item, price, quantity);
+      }} />
 
       {outOfStockItem && (
         <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
@@ -345,55 +310,19 @@ const App: React.FC = () => {
             <h3 className="font-heading text-2xl mb-2">Out of Stock</h3>
             <p className="mb-4 font-body text-sm">Your {outOfStockItem} is out of stock. Buy more?</p>
             <div className="flex flex-col gap-2">
-              <button 
-                className="neubrutalist-btn bg-yellow-400 text-black px-4 py-2"
-                onClick={() => {
-                  setOutOfStockItem(null);
-                  setShopOpen(true);
-                }}
-              >
-                Buy more
-              </button>
-              <button 
-                className="neubrutalist-btn bg-gray-200 text-black px-4 py-2"
-                onClick={() => setOutOfStockItem(null)}
-              >
-                Stock is finished
-              </button>
+              <button className="neubrutalist-btn bg-yellow-400 text-black px-4 py-2" onClick={() => { setOutOfStockItem(null); setShopOpen(true); }}>Buy more</button>
+              <button className="neubrutalist-btn bg-gray-200 text-black px-4 py-2" onClick={() => setOutOfStockItem(null)}>Stock is finished</button>
             </div>
           </div>
         </div>
       )}
 
       <div className="relative z-10 flex flex-col h-full max-w-7xl mx-auto w-full shadow-2xl backdrop-blur-sm border-x-4 border-black">
-        <Header 
-          score={gameState.score}
-          onOpenGlossary={() => setGlossaryOpen(true)}
-          spzaBalance={spzaBalance}
-          rep={rep}
-        />
-        
+        <Header score={gameState.score} onOpenGlossary={() => setGlossaryOpen(true)} spzaBalance={spzaBalance} rep={rep} />
+
         <div className="flex flex-1">
-          <Sidebar 
-            onOpenWallet={() => setWalletOpen(true)} 
-            onOpenShop={() => setShopOpen(true)}
-          />
-          <GameArea
-            playing={gameState.playing}
-            timeLeft={gameState.timeLeft}
-            currentCustomer={currentCustomer}
-            currentDialogue={currentDialogue}
-            showCustomer={showCustomer}
-            showBubble={showBubble}
-            onStartGame={startGame}
-            onHandleOrder={handleOrder}
-            score={gameState.score}
-            gameOver={gameOver}
-            onRestart={handleRestart}
-            shakeMain={shakeMain}
-            hearts={gameState.hearts}
-            stock={stock}
-          />
+          <Sidebar onOpenWallet={() => setWalletOpen(true)} onOpenShop={() => setShopOpen(true)} rep={rep} />
+          <GameArea playing={gameState.playing} timeLeft={gameState.timeLeft} currentCustomer={currentCustomer} currentDialogue={currentDialogue} showCustomer={showCustomer} showBubble={showBubble} onStartGame={startGame} onHandleOrder={handleOrder} score={gameState.score} gameOver={gameOver} onRestart={handleRestart} shakeMain={shakeMain} hearts={gameState.hearts} stock={stock} />
         </div>
       </div>
     </div>

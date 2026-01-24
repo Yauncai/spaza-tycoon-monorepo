@@ -5,9 +5,10 @@ import GaslessMintPanel from './GaslessMintPanel';
 interface SidebarProps {
   onOpenWallet: () => void;
   onOpenShop: () => void;
+  rep: number;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ onOpenWallet, onOpenShop }) => {
+const Sidebar: React.FC<SidebarProps> = ({ onOpenWallet, onOpenShop, rep }) => {
   const [activeTab, setActiveTab] = useState<'nav' | 'stash' | 'mint'>('nav');
 
   return (
@@ -88,7 +89,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenWallet, onOpenShop }) => {
             <span className="material-symbols-outlined">arrow_back</span>
             <span className="font-heading text-sm">Back</span>
           </button>
-          <GaslessMintPanel />
+          <GaslessMintPanel rep={rep} />
         </>
       )}
     </aside>

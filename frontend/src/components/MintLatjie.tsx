@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAccount } from 'wagmi';
+import { useNFTs } from '../web3/useNFTs';
 import { baseSepolia } from 'wagmi/chains';
 import type { Abi, Address } from 'viem';
 import { zeroAddress } from 'viem';
@@ -24,6 +25,8 @@ interface MintLatjieProps {
 const MintLatjie: React.FC<MintLatjieProps> = ({ onSuccess }) => {
   const { address } = useAccount();
   const toAddress: Address = address ?? zeroAddress;
+  const { nfts, fetchNFTs } = useNFTs();
+  const hasLatjie = nfts.some(n => n.type === 'Latjie');
 
   return (
     <Transaction
@@ -37,13 +40,17 @@ const MintLatjie: React.FC<MintLatjieProps> = ({ onSuccess }) => {
         },
       ]}
       isSponsored
-      onSuccess={onSuccess}
+      onSuccess={() => {
+        // refresh NFTs after successful mint and call parent callback
+        fetchNFTs();
+        if (onSuccess) onSuccess();
+      }}
     >
       <div className="flex flex-col gap-3">
         <TransactionButton
-          text={address ? 'Recruit Latjie (Gasless)' : 'Connect wallet to mint'}
+          text={hasLatjie ? 'Latjie owned' : (address ? 'Recruit Latjie (Gasless)' : 'Connect wallet to mint')}
           className="neubrutalist-btn bg-yellow-400 border-4 border-black font-sign text-black px-4 py-3 hover:-translate-y-0.5 hover:translate-x-0.5 transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
-          disabled={!address}
+          disabled={!address || hasLatjie}
         />
         <TransactionStatus />
       </div>
