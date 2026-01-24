@@ -112,6 +112,66 @@ export const useNFTs = () => {
 
       await tryIndexer();
 
+      // Normalize image URIs (handle ipfs://, /ipfs/, Pinata gateways, {id} templates, json metadata pointers)
+      const IPFS_GATEWAY = 'https://dweb.link/ipfs/';
+
+      async function normalizeImageUri(raw: string | undefined, tokenId?: string): Promise<string> {
+        if (!raw) return '/assets/placeholder.png';
+        const val = String(raw).trim();
+        if (!val) return '/assets/placeholder.png';
+        if (val.startsWith('data:')) return val;
+
+        if (val.startsWith('ipfs://')) {
+          const path = val.replace(/^ipfs:\/\/(?:ipfs\/)?/, '');
+          return IPFS_GATEWAY + path;
+        }
+
+        if (val.startsWith('/ipfs/')) {
+          return IPFS_GATEWAY + val.replace(/^\/ipfs\//, '');
+        }
+
+        if (val.includes('pinata') && val.includes('/ipfs/')) return val;
+
+        if (val.includes('{id}') && tokenId) {
+          try {
+            const hex = BigInt(tokenId).toString(16).padStart(64, '0');
+            const replaced = val.replace(/\{id\}/g, hex);
+            return normalizeImageUri(replaced, undefined);
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        if (/(\.json$)|metadata/i.test(val) || val.includes('token') || val.includes('metadata')) {
+          try {
+            const res = await fetch(val);
+            if (res.ok) {
+              const json = await res.json();
+              const image = json.image || json.image_url || json.imageUrl || json.image_url;
+              if (image) return normalizeImageUri(image, tokenId);
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        if (val.startsWith('http://') || val.startsWith('https://')) return val;
+
+        return '/assets/placeholder.png';
+      }
+
+      // Normalize images for any results returned by indexer
+      if (results.length > 0) {
+        for (let i = 0; i < results.length; i++) {
+          try {
+            results[i].image = await normalizeImageUri(results[i].image, results[i].tokenId);
+          } catch (e) {
+            results[i].image = '/assets/placeholder.png';
+          }
+        }
+      }
+
+
       // Also check the on-chain ERC-1155 contract for owned Latjie/Lepara tokens
       try {
         const ERC1155_ABI = parseAbi([
@@ -215,6 +275,15 @@ export const useNFTs = () => {
       } catch (e) {
         console.warn('ERC721 Grootman check failed', e);
       }
+            // Final normalization for images added by on-chain fallbacks
+      for (let i = 0; i < results.length; i++) {
+        try {
+          results[i].image = await normalizeImageUri(results[i].image, results[i].tokenId);
+        } catch (e) {
+          results[i].image = '/assets/placeholder.png';
+        }
+      }
+
       // Dedupe by contract+tokenId
       const seen = new Set<string>();
       const deduped = results.filter(r => {

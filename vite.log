@@ -1,0 +1,42 @@
+nohup: ignoring input
+
+> spaza-tycoon-react@1.0.0 dev
+> vite
+
+Port 3000 is in use, trying another one...
+
+  VITE v5.4.21  ready in 219 ms
+
+  ➜  Local:   http://localhost:3001/
+  ➜  Network: use --host to expose
+6:36:03 AM [vite] hmr update /src/App.tsx, /src/index.css, /src/components/GaslessMintPanel.tsx, /src/components/MintLatjie.tsx, /src/components/NFTGallery.tsx
+6:43:33 AM [vite] hmr update /src/App.tsx, /src/index.css, /src/components/GaslessMintPanel.tsx, /src/components/MintLatjie.tsx, /src/components/NFTGallery.tsx
+6:44:30 AM [vite] hmr update /src/App.tsx, /src/index.css, /src/components/GaslessMintPanel.tsx, /src/components/MintLatjie.tsx, /src/components/NFTGallery.tsx
+7:09:43 AM [vite] hmr update /src/App.tsx, /src/index.css
+7:09:43 AM [vite] hmr update /src/index.css
+7:09:43 AM [vite] page reload src/main.tsx
+7:09:43 AM [vite] hmr update /src/components/GlossaryModal.tsx
+7:09:43 AM [vite] page reload src/types/index.ts
+7:09:43 AM [vite] hmr update /src/components/GameArea.tsx
+7:09:43 AM [vite] hmr update /src/components/GaslessMintPanel.tsx
+7:09:43 AM [vite] hmr update /src/components/GlossaryModal.tsx
+7:09:43 AM [vite] hmr update /src/components/Header.tsx
+7:09:43 AM [vite] hmr update /src/components/LoginScreen.tsx
+7:09:43 AM [vite] hmr update /src/components/MintLatjie.tsx
+7:09:43 AM [vite] hmr update /src/components/NFTGallery.tsx
+7:09:43 AM [vite] hmr update /src/components/ShopScreen.tsx
+7:09:43 AM [vite] hmr update /src/components/Sidebar.tsx
+7:09:43 AM [vite] page reload src/components/WalletGate.tsx
+7:09:43 AM [vite] hmr update /src/components/WalletScreen.tsx
+7:09:43 AM [vite] page reload src/hooks/useSound.ts
+7:09:43 AM [vite] page reload src/hooks/useWeather.ts
+7:09:43 AM [vite] page reload src/web3/config.ts
+7:09:43 AM [vite] page reload src/web3/useBasename.ts
+7:09:43 AM [vite] page reload src/web3/useERC1155Mint.ts
+7:09:43 AM [vite] page reload src/web3/useGaslessMint.ts
+7:09:43 AM [vite] page reload src/web3/useGrootmanMint.ts
+7:09:43 AM [vite] page reload src/web3/useNFTs.ts
+7:09:43 AM [vite] page reload src/web3/useSmartWallet.ts
+7:09:43 AM [vite] .env changed, restarting server...
+7:09:43 AM [vite] page reload index.html
+7:09:43 AM [vite] server restarted.
