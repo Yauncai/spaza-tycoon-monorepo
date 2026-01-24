@@ -174,6 +174,10 @@ export const useNFTs = () => {
 
       // Also check the on-chain ERC-1155 contract for owned Latjie/Lepara tokens
       try {
+        if (!publicClient) {
+          throw new Error("Public client not initialized");
+        }
+
         const ERC1155_ABI = parseAbi([
           'function LATJIE() view returns (uint256)',
           'function LEPARA() view returns (uint256)',
@@ -236,6 +240,10 @@ export const useNFTs = () => {
 
       // Also check an ERC-721 Grootman contract for ownership (display placeholder if present)
       try {
+        if (!publicClient) {
+          throw new Error("Public client not initialized");
+        }
+
         const GROOT_ABI = parseAbi([
           'function balanceOf(address owner) view returns (uint256)',
           'function tokenURI(uint256 tokenId) view returns (string)'
