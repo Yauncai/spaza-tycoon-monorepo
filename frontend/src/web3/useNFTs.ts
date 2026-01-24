@@ -25,32 +25,92 @@ export const useNFTs = () => {
     setError(null);
 
     try {
-      // Fetch NFTs from Base Sepolia using Alchemy or similar
-      // For now, we'll use a mock response structure
-      // In production, replace with actual API call
-      
-      const response = await fetch(
-        `https://api.zora.co/v1/nfts?owner=${address}&chain=baseSepolia`
-      );
+      const results: NFT[] = [];
 
-      if (response.ok) {
-        const data = await response.json();
-        const formattedNFTs: NFT[] = (data.nfts || []).map((nft: any) => {
-          let type: 'Latjie' | 'Lepara' | 'Grootman' = 'Latjie';
-          if (nft.name?.includes('Lepara')) type = 'Lepara';
-          if (nft.name?.includes('Grootman')) type = 'Grootman';
+      // Optional external indexer: prefer Moralis (if key present), else Alchemy (if key present).
+      // This returns exact tokenIds + metadata and is much faster/reliable for ERC-721.
+      const moralisKey = import.meta.env.VITE_MORALIS_KEY as string | undefined;
+      const alchemyKey = import.meta.env.VITE_ALCHEMY_KEY as string | undefined;
+      // Default to Base Sepolia for this project unless overridden in env
+      const alchemyNetwork = (import.meta.env.VITE_ALCHEMY_NETWORK as string) || 'base-sepolia';
 
-          return {
-            tokenId: nft.tokenId,
-            name: nft.name || 'Unknown',
-            image: nft.image || '/assets/placeholder.png',
-            contractAddress: nft.contractAddress,
-            type,
-          };
-        });
+      const tryIndexer = async () => {
+        if (moralisKey) {
+          try {
+            const chainParam = (import.meta.env.VITE_MORALIS_CHAIN as string) || 'base-sepolia';
+            const url = `https://deep-index.moralis.io/api/v2/${address}/nft?chain=${chainParam}&format=decimal`;
+            const res = await fetch(url, { headers: { 'X-API-Key': moralisKey } });
+            if (!res.ok) throw new Error(`Moralis error ${res.status}`);
+            const data = await res.json();
+            const formatted: NFT[] = (data.result || data.nfts || []).map((nft: any) => {
+              const name = nft.metadata?.name || nft.name || nft.title || 'Unknown';
+              const image = nft.metadata?.image || nft.image || nft.token_uri || '/assets/placeholder.png';
+              let type: 'Latjie' | 'Lepara' | 'Grootman' = 'Latjie';
+              if (String(name).includes('Lepara')) type = 'Lepara';
+              if (String(name).includes('Grootman')) type = 'Grootman';
+              return {
+                tokenId: String(nft.token_id || nft.tokenId || nft.tokenIdRaw || ''),
+                name,
+                image,
+                contractAddress: String(nft.token_address || nft.contract || nft.contractAddress || ''),
+                type,
+              };
+            });
+            results.push(...formatted);
+            return;
+          } catch (e) {
+            console.debug('Moralis lookup failed, falling back', e);
+          }
+        }
 
-        setNfts(formattedNFTs);
-      }
+        if (alchemyKey) {
+          try {
+            // Example Alchemy getNFTs endpoint: https://{network}.g.alchemy.com/v2/{key}/getNFTs?owner={address}
+            const url = `https://${alchemyNetwork}.g.alchemy.com/v2/${alchemyKey}/getNFTs?owner=${address}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`Alchemy error ${res.status}`);
+            const data = await res.json();
+            const owned = data.ownedNfts || data.owned_nfts || data.nfts || [];
+            const formatted: NFT[] = owned.map((nft: any) => {
+              const metadata = nft.metadata || nft.token?.metadata || {};
+              const name = metadata.name || nft.title || nft.contract?.name || 'Unknown';
+              const image = metadata.image || nft.media?.[0]?.gateway || '/assets/placeholder.png';
+              let type: 'Latjie' | 'Lepara' | 'Grootman' = 'Latjie';
+              if (String(name).includes('Lepara')) type = 'Lepara';
+              if (String(name).includes('Grootman')) type = 'Grootman';
+
+              // normalize tokenId: Alchemy often returns hex like "0x1"
+              let rawId = nft.id?.tokenId || nft.tokenId || nft.token_id || '';
+              let tokenIdStr = '';
+              try {
+                if (typeof rawId === 'string' && rawId.startsWith('0x')) {
+                  tokenIdStr = BigInt(rawId).toString();
+                } else if (typeof rawId === 'number') {
+                  tokenIdStr = String(rawId);
+                } else {
+                  tokenIdStr = String(rawId || '');
+                }
+              } catch (e) {
+                tokenIdStr = String(rawId || '');
+              }
+
+              return {
+                tokenId: tokenIdStr,
+                name,
+                image,
+                contractAddress: String(nft.contract?.address || nft.contractAddress || ''),
+                type,
+              };
+            });
+            results.push(...formatted);
+            return;
+          } catch (e) {
+            console.debug('Alchemy lookup failed, falling back', e);
+          }
+        }
+      };
+
+      await tryIndexer();
 
       // Also check the on-chain ERC-1155 contract for owned Latjie/Lepara tokens
       try {
@@ -100,17 +160,14 @@ export const useNFTs = () => {
             }
 
             const tokenIdStr = id.toString();
-            const type: 'Latjie' | 'Lepara' | 'Grootman' = id === latjieId ? 'Latjie' : 'Lepara';
-            setNfts(prev => [
-              ...prev,
-              {
-                tokenId: tokenIdStr,
-                name: type,
-                image: uri || '/assets/placeholder.png',
-                contractAddress: CONTRACT_ADDRESS,
-                type,
-              },
-            ]);
+            const type: 'Latjie' | 'Lepara' = id === latjieId ? 'Latjie' : 'Lepara';
+            results.push({
+              tokenId: tokenIdStr,
+              name: type,
+              image: uri || '/assets/placeholder.png',
+              contractAddress: CONTRACT_ADDRESS,
+              type,
+            });
           }
         }
       } catch (e) {
@@ -133,7 +190,8 @@ export const useNFTs = () => {
         }) as bigint;
 
         if (grootBalance && grootBalance > 0n) {
-          // Attempt to read a tokenURI(1) as a best-effort image; otherwise use placeholder.
+          // Best-effort: try to surface an image. Token IDs may not be enumerable on-chain
+          // without ERC-721 Enumerable; use a placeholder if tokenURI can't be read reliably.
           let uri = '';
           try {
             uri = (await publicClient.readContract({
@@ -146,24 +204,30 @@ export const useNFTs = () => {
             uri = '/assets/placeholder.png';
           }
 
-          setNfts(prev => [
-            ...prev,
-            {
-              tokenId: 'grootman',
-              name: 'Grootman',
-              image: uri || '/assets/placeholder.png',
-              contractAddress: GROOT_ADDR,
-              type: 'Grootman',
-            },
-          ]);
+          results.push({
+            tokenId: 'grootman',
+            name: 'Grootman',
+            image: uri || '/assets/placeholder.png',
+            contractAddress: GROOT_ADDR,
+            type: 'Grootman',
+          });
         }
       } catch (e) {
         console.warn('ERC721 Grootman check failed', e);
       }
+      // Dedupe by contract+tokenId
+      const seen = new Set<string>();
+      const deduped = results.filter(r => {
+        const key = `${r.contractAddress.toLowerCase()}::${r.tokenId}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      setNfts(deduped);
     } catch (err) {
       console.error('Failed to fetch NFTs:', err);
       setError('Could not load your NFTs');
-      // Set empty array on error
       setNfts([]);
     } finally {
       setLoading(false);
