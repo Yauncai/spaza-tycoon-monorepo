@@ -6,9 +6,10 @@ interface HeaderProps {
   score: number;
   onOpenGlossary: () => void;
   spzaBalance: number;
+  rep: number;
 }
 
-const Header: React.FC<HeaderProps> = ({ score, onOpenGlossary, spzaBalance }) => {
+const Header: React.FC<HeaderProps> = ({ score, onOpenGlossary, spzaBalance, rep }) => {
   const { address } = useAccount();
   const { basenameData, resolveBasename, getDisplayName, getAvatarGradient } = useBasename();
 
@@ -53,7 +54,7 @@ const Header: React.FC<HeaderProps> = ({ score, onOpenGlossary, spzaBalance }) =
 
         <div className="hidden md:flex items-center gap-2 bg-purple-100 px-3 py-1 border-2 border-black rounded-full">
           <span className="text-[10px] uppercase font-bold text-purple-800">Rep</span>
-          <span className="font-heading text-lg">{850 + (score * 10)}</span>
+          <span className="font-heading text-lg">{rep}</span>
         </div>
         <div className="hidden md:flex items-center gap-2 bg-green-100 px-3 py-1 border-2 border-black rounded-full">
           <span className="text-[10px] uppercase font-bold text-green-800">$SPZA</span>

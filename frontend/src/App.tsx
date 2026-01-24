@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import LoginScreen from './components/LoginScreen';
 import useERC1155Mint from './web3/useERC1155Mint';
+import { useWeather } from './hooks/useWeather';
 import GlossaryModal from './components/GlossaryModal';
 import WalletScreen from './components/WalletScreen';
 import ShopScreen from './components/ShopScreen';
@@ -41,7 +42,9 @@ const App: React.FC = () => {
   const [walletOpen, setWalletOpen] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
   const [gameOver, setGameOver] = useState(false);
-  const [spzaBalance, setSpzaBalance] = useState(1240);
+  const [spzaBalance, setSpzaBalance] = useState(0);
+  const [rep, setRep] = useState(0);
+  const [consecutiveServes, setConsecutiveServes] = useState(0);
   const [showMintPrompt, setShowMintPrompt] = useState(false);
   const [promotedToLepara, setPromotedToLepara] = useState(false);
   const [promotedToGrootman, setPromotedToGrootman] = useState(false);
@@ -78,6 +81,7 @@ const App: React.FC = () => {
 
   // ERC-1155 mint hook (Latjie / Lepara)
   const { mintLatjie, mintLepara, isPending: mintPending, error: mintError } = useERC1155Mint();
+  const weather = useWeather();
 
   // ERC-721 Grootman mint hook (uses provided IPFS metadata)
   const { mintGrootman, isPending: grootPending, error: grootError } = useGrootmanMint();
@@ -115,6 +119,15 @@ const App: React.FC = () => {
     setStock(prev => ({ ...prev, [item]: prev[item] + quantity }));
     playSound('kaching');
   }, [playSound]);
+
+  const ITEM_PRICE: Record<ItemType, number> = {
+    Bread: 5,
+    Coke: 3,
+    Milk: 4,
+    Eggs: 6,
+    Goslos: 8,
+    Benny: 10
+  };
 
   const nextRound = useCallback(() => {
     setShowCustomer(false);
@@ -203,11 +216,27 @@ const App: React.FC = () => {
       }
 
       setStock(prev => ({ ...prev, [item]: Math.max(0, prev[item] - 1) }));
+
+      // Award SPZA and Rep based on item price, speed, weather, and combos
+      const baseEarn = ITEM_PRICE[item] ?? 1;
+      const timeLeft = gameState.timeLeft ?? 0;
+      const speedMultiplier = 1 + Math.max(0, (timeLeft / 10) * 0.5); // up to +50% for fastest serves
+      const weatherModifier = weather.icon === 'rainy' ? 1.1 : 1.0; // +10% in rain
+      const comboBonus = 1 + Math.max(0, consecutiveServes) * 0.05; // +5% per consecutive serve
+
+      const spzaEarned = Math.round(baseEarn * speedMultiplier * weatherModifier * comboBonus);
+      const repGain = Math.max(1, Math.round(baseEarn * 0.1 * speedMultiplier * comboBonus));
+
+      setSpzaBalance(prev => prev + spzaEarned);
+      setRep(prev => prev + repGain);
+      setConsecutiveServes(prev => prev + 1);
+
       setGameState(prev => ({
         ...prev,
         score: prev.score + 1,
         timeLeft: Math.min(10, prev.timeLeft + 2)
       }));
+
       playSound('kaching');
       nextRound();
     } else {
@@ -220,11 +249,15 @@ const App: React.FC = () => {
         }
         return { ...prev, hearts: newHearts };
       });
-      
+
+      // Penalty: reset combo and small rep loss
+      setConsecutiveServes(0);
+      setRep(prev => Math.max(0, prev - 1));
+
       // Show "Haibo!?" feedback
       setCurrentDialogue('<span class="text-red-600 font-bold text-xl">Haibo!?</span>');
       setShakeMain(true);
-      
+
       setTimeout(() => {
         setShakeMain(false);
         nextRound(); // Move to next customer after feedback
@@ -337,6 +370,7 @@ const App: React.FC = () => {
           score={gameState.score}
           onOpenGlossary={() => setGlossaryOpen(true)}
           spzaBalance={spzaBalance}
+          rep={rep}
         />
         
         <div className="flex flex-1">
