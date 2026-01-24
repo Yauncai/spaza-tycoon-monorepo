@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react';
 import LoginScreen from './components/LoginScreen';
+import useERC1155Mint from './web3/useERC1155Mint';
 import GlossaryModal from './components/GlossaryModal';
 import WalletScreen from './components/WalletScreen';
 import ShopScreen from './components/ShopScreen';
@@ -9,6 +10,8 @@ import GameArea from './components/GameArea';
 import { GameState, Character, ItemType } from './types';
 import { CHARACTERS, ITEMS, PHRASES } from './data/gameData';
 import { useSound } from './hooks/useSound';
+import useGrootmanMint from './web3/useGrootmanMint';
+import { useAccount } from 'wagmi';
 
 const INITIAL_STOCK: Record<ItemType, number> = {
   Bread: 15,
@@ -39,6 +42,9 @@ const App: React.FC = () => {
   const [shopOpen, setShopOpen] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [spzaBalance, setSpzaBalance] = useState(1240);
+  const [showMintPrompt, setShowMintPrompt] = useState(false);
+  const [promotedToLepara, setPromotedToLepara] = useState(false);
+  const [promotedToGrootman, setPromotedToGrootman] = useState(false);
   const [shakeMain, setShakeMain] = useState(false);
   const [stock, setStock] = useState<Record<ItemType, number>>(INITIAL_STOCK);
   const [outOfStockItem, setOutOfStockItem] = useState<ItemType | null>(null);
@@ -66,7 +72,43 @@ const App: React.FC = () => {
 
   const handleWalletConnect = useCallback((address: string) => {
     setGameState(prev => ({ ...prev, walletConnected: true }));
+    // Show mint prompt on first connect
+    setShowMintPrompt(true);
   }, []);
+
+  // ERC-1155 mint hook (Latjie / Lepara)
+  const { mintLatjie, mintLepara, isPending: mintPending, error: mintError } = useERC1155Mint();
+
+  // ERC-721 Grootman mint hook (uses provided IPFS metadata)
+  const { mintGrootman, isPending: grootPending, error: grootError } = useGrootmanMint();
+  const { address: accountAddress } = useAccount();
+
+  // Auto-trigger Grootman mint when SPZA threshold reached
+  React.useEffect(() => {
+    if (!gameState.walletConnected) return;
+    const GROOT_THRESHOLD = 5000;
+    if (!promotedToGrootman && spzaBalance >= GROOT_THRESHOLD && typeof mintGrootman === 'function') {
+      const metadataURI = 'ipfs://bafkreidu7vwogndcpfllabbysjhcbevdxhk4o5qpzczsjtzwhzia3fz4ri';
+      const to = accountAddress ?? '';
+      if (!to) return;
+      mintGrootman(to as `0x${string}`, metadataURI)
+        .then(() => setPromotedToGrootman(true))
+        .catch((e) => console.warn('Grootman mint failed', e));
+    }
+  }, [spzaBalance, promotedToGrootman, mintGrootman, gameState.walletConnected, accountAddress]);
+
+  // Auto-trigger Lepara promotion when SPZA threshold reached
+  React.useEffect(() => {
+    if (!gameState.walletConnected) return;
+    // user specified Lepara at 1500
+    const LEPARA_THRESHOLD = 1500;
+    if (!promotedToLepara && spzaBalance >= LEPARA_THRESHOLD) {
+      // attempt gasless promotion; mark promoted to avoid repeats
+      mintLepara()
+        .then(() => setPromotedToLepara(true))
+        .catch((e) => console.warn('Lepara promotion failed', e));
+    }
+  }, [spzaBalance, promotedToLepara, mintLepara, gameState.walletConnected]);
 
   const handlePurchaseStock = useCallback((item: ItemType, price: number, quantity = 5) => {
     setSpzaBalance(prev => prev - price);
@@ -213,6 +255,35 @@ const App: React.FC = () => {
   return (
     <div className="bg-white min-h-screen flex flex-col relative font-body">
       {!gameState.walletConnected && <LoginScreen onConnect={handleWalletConnect} />}
+      {/* Mint prompt shown once after login for Latjie (ERC-1155) */}
+      {gameState.walletConnected && showMintPrompt && (
+        <div className="fixed inset-0 z-[999] bg-black/60 flex items-center justify-center px-4">
+          <div className="bg-white border-4 border-black p-6 max-w-md w-full text-center shadow-[8px_8px_0px_0px_black]">
+            <h3 className="font-heading text-2xl mb-2">Recruit Latjie</h3>
+            <p className="mb-4 text-sm">Welcome hustler — recruit your Latjie character for free. This mint is gasless.</p>
+            {mintError && <p className="text-red-600 mb-2 text-sm">{mintError}</p>}
+            <div className="flex gap-3 justify-center">
+              <button
+                className="neubrutalist-btn bg-yellow-400 px-4 py-2"
+                onClick={async () => {
+                  await mintLatjie();
+                  setShowMintPrompt(false);
+                }}
+                disabled={mintPending}
+              >
+                {mintPending ? 'Minting...' : 'Mint Latjie'}
+              </button>
+              <button
+                className="neubrutalist-btn bg-gray-200 px-4 py-2"
+                onClick={() => setShowMintPrompt(false)}
+                disabled={mintPending}
+              >
+                Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       <GlossaryModal 
         isOpen={glossaryOpen} 

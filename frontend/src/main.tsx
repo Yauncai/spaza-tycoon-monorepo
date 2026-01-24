@@ -4,7 +4,7 @@ import { WagmiProvider } from 'wagmi'
 import { baseSepolia } from 'wagmi/chains'
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import { OnchainKitProvider } from '@coinbase/onchainkit'
-import App from './App.tsx'
+import App from './App'
 import { wagmiConfig } from './web3/config'
 import './index.css'
 
